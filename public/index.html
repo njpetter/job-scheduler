@@ -4,52 +4,88 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lenskart Job Scheduler</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><circle cx=%2212%22 cy=%2212%22 r=%2210%22></circle><polyline points=%2212 6 12 12 16 14%22></polyline></svg>">
     <style>
-        :root { --primary: #00bac6; --dark: #1a1a1a; --light: #f4f4f4; --success: #2ecc71; --error: #e74c3c; }
+        :root { --primary: #00bac6; --dark: #1a1a1a; --light: #f4f4f4; --success: #2ecc71; --error: #e74c3c; --warn: #f1c40f; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background: #f0f2f5; color: #333; }
         .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
         
         /* Header */
-        header { background: var(--dark); color: white; padding: 1rem 0; margin-bottom: 2rem; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        header { background: var(--dark); color: white; padding: 1rem 0; margin-bottom: 2rem; box-shadow: 0 2px 5px rgba(0,0,0,0.1); position: sticky; top: 0; z-index: 100; }
         header .container { display: flex; justify-content: space-between; align-items: center; }
         h1 { margin: 0; font-size: 1.5rem; }
-        .status-badge { background: var(--success); color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; }
+        .status-badge { background: var(--success); color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; transition: all 0.3s; }
+        .status-badge.alert { background: var(--error); animation: pulse 2s infinite; }
+
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
 
         /* Grid Layout */
-        .dashboard { display: grid; grid-template-columns: 350px 1fr; gap: 20px; }
-        @media (max-width: 768px) { .dashboard { grid-template-columns: 1fr; } }
+        .dashboard { display: grid; grid-template-columns: 400px 1fr; gap: 20px; }
+        @media (max-width: 900px) { .dashboard { grid-template-columns: 1fr; } }
 
         /* Cards */
         .card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 20px; }
         .card h2 { margin-top: 0; color: var(--dark); border-bottom: 2px solid #eee; padding-bottom: 10px; font-size: 1.2rem; }
 
-        /* Form */
+        /* Form Controls */
         .form-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; font-weight: 500; }
-        input, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
-        button { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; }
+        input[type="url"], select, input[type="number"], input[type="time"] { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; font-size: 1rem; }
+        
+        /* Visual Builder Styles */
+        .builder-section { background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #eee; margin-bottom: 15px; }
+        .hidden { display: none; }
+        .day-selector { display: flex; gap: 5px; margin-top: 5px; }
+        .day-checkbox { display: none; }
+        .day-label { width: 35px; height: 35px; border-radius: 50%; border: 1px solid #ddd; background: white; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.8rem; font-weight: bold; color: #666; transition: all 0.2s; }
+        .day-checkbox:checked + .day-label { background: var(--primary); color: white; border-color: var(--primary); }
+        .generated-cron { background: #eef; color: #445; padding: 10px; font-family: monospace; border-radius: 4px; margin-top: 10px; font-size: 0.9rem; border: 1px solid #ccd; }
+        
+        button { background: var(--primary); color: white; border: none; padding: 12px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; font-size: 1rem; margin-top: 10px; transition: all 0.2s; }
         button:hover { opacity: 0.9; }
+        button.update-mode { background: var(--warn); color: #333; } 
 
+        /* FILTERS BAR */
+        .filter-bar { display: flex; gap: 10px; margin-bottom: 15px; }
+        .filter-btn { padding: 8px 16px; border-radius: 20px; border: 1px solid #eee; background: white; cursor: pointer; font-size: 0.9rem; font-weight: 500; color: #555; transition: all 0.2s; }
+        .filter-btn:hover { background: #f4f4f4; }
+        .filter-btn.active { background: var(--dark); color: white; border-color: var(--dark); }
+        .filter-btn.active-error { background: var(--error); color: white; border-color: var(--error); }
+        
         /* Job List */
-        .job-item { border: 1px solid #eee; border-radius: 4px; padding: 15px; margin-bottom: 10px; transition: all 0.2s; position: relative; }
+        #jobs-list { max-height: 70vh; overflow-y: auto; padding-right: 5px; }
+        .job-item { border: 1px solid #eee; border-radius: 4px; padding: 15px; margin-bottom: 10px; transition: all 0.2s; position: relative; background: white; }
         .job-item:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.05); border-left: 4px solid var(--primary); }
-        .job-header { display: flex; justify-content: space-between; margin-bottom: 5px; }
-        .job-id { font-family: monospace; color: #666; font-size: 0.8rem; }
-        .job-schedule { font-weight: bold; color: var(--primary); }
-        .job-api { font-size: 0.9rem; color: #555; word-break: break-all; }
-        .actions { margin-top: 10px; display: flex; gap: 10px; }
-        .btn-sm { padding: 5px 10px; font-size: 0.8rem; width: auto; }
-        .btn-danger { background: var(--error); }
+        .job-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+        .job-info-left { display: flex; flex-direction: column; gap: 2px; }
+        .job-id { font-family: monospace; color: #888; font-size: 0.75rem; }
+        .job-schedule { font-weight: bold; color: var(--primary); font-size: 1.1rem; }
+        .job-api { font-size: 0.9rem; color: #555; word-break: break-all; margin-top: 8px; }
+        
+        .pill { padding: 4px 10px; border-radius: 12px; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
+        .pill-pending { background: #eee; color: #777; }
+        .pill-success { background: var(--success); color: white; }
+        .pill-failure { background: var(--error); color: white; }
+
+        .actions { margin-top: 15px; display: flex; gap: 10px; }
+        .btn-sm { padding: 6px 12px; font-size: 0.85rem; width: auto; margin-top: 0; }
+        .btn-danger { background: var(--error); color: white; }
+        .btn-edit { background: var(--warn); color: #333; border: none; }
         .btn-outline { background: transparent; border: 1px solid var(--primary); color: var(--primary); }
 
-        /* Executions Table */
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { text-align: left; padding: 8px; border-bottom: 1px solid #eee; font-size: 0.9rem; }
-        th { color: #888; font-weight: 500; }
+        /* Modal */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-content { background: white; width: 90%; max-width: 800px; max-height: 80vh; border-radius: 8px; display: flex; flex-direction: column; animation: slideIn 0.3s ease-out; }
+        .modal-header { padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+        .modal-body { padding: 20px; overflow-y: auto; }
+        .close-btn { background: transparent; color: #666; font-size: 1.5rem; border: none; cursor: pointer; padding: 0; width: auto; margin: 0; }
+        @keyframes slideIn { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; font-size: 0.9rem; }
+        th { color: #888; font-weight: 500; background: #fafafa; position: sticky; top: 0; }
         .status-success { color: var(--success); font-weight: bold; }
         .status-failure { color: var(--error); font-weight: bold; }
-
-        /* Loader */
         .loader { text-align: center; padding: 20px; color: #888; }
     </style>
 </head>
@@ -58,8 +94,10 @@
 <header>
     <div class="container">
         <div style="display:flex; align-items:center; gap:10px;">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-            <h1>Lenskart Job Scheduler</h1>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline><line x1="12" y1="2" x2="12" y2="4"></line>
+            </svg>
+            <h1 style="margin-left: 8px;">Lenskart Job Scheduler</h1>
         </div>
         <div id="system-status" class="status-badge">System Online</div>
     </div>
@@ -68,17 +106,55 @@
 <div class="container dashboard">
     <div class="sidebar">
         <div class="card">
-            <h2>Create New Job</h2>
+            <h2 id="form-title">Create New Job</h2>
             <form id="create-job-form">
                 <div class="form-group">
-                    <label>API Endpoint (Target)</label>
+                    <label>API Endpoint</label>
                     <input type="url" id="api" placeholder="https://httpbin.org/post" required value="https://httpbin.org/post">
                 </div>
+                
                 <div class="form-group">
-                    <label>CRON Schedule (Seconds supported)</label>
-                    <input type="text" id="schedule" placeholder="*/5 * * * * *" required value="*/10 * * * * *">
-                    <small style="color:#666; font-size:0.8rem;">Format: sec min hour day month dayOfWeek</small>
+                    <label>Frequency Type</label>
+                    <select id="builder-type" onchange="updateBuilderView()">
+                        <option value="seconds">Rapid (Every X Seconds)</option>
+                        <option value="daily">Daily (Specific Time)</option>
+                        <option value="weekly">Weekly (Specific Days)</option>
+                        <option value="custom">Advanced (Raw Code)</option>
+                    </select>
                 </div>
+
+                <div id="section-seconds" class="builder-section">
+                    <label>Run every:</label>
+                    <select id="seconds-input" onchange="buildCron()">
+                        <option value="10">10 Seconds</option>
+                        <option value="30">30 Seconds</option>
+                        <option value="60">60 Seconds (1 Minute)</option>
+                    </select>
+                </div>
+
+                <div id="section-time" class="builder-section hidden">
+                    <label>At Time:</label>
+                    <input type="time" id="time-input" value="09:00" onchange="buildCron()">
+                </div>
+
+                <div id="section-days" class="builder-section hidden">
+                    <label>On Days:</label>
+                    <div class="day-selector">
+                        <input type="checkbox" id="d-mon" class="day-checkbox" value="1" onchange="buildCron()"><label for="d-mon" class="day-label">M</label>
+                        <input type="checkbox" id="d-tue" class="day-checkbox" value="2" onchange="buildCron()"><label for="d-tue" class="day-label">T</label>
+                        <input type="checkbox" id="d-wed" class="day-checkbox" value="3" onchange="buildCron()"><label for="d-wed" class="day-label">W</label>
+                        <input type="checkbox" id="d-thu" class="day-checkbox" value="4" onchange="buildCron()"><label for="d-thu" class="day-label">T</label>
+                        <input type="checkbox" id="d-fri" class="day-checkbox" value="5" onchange="buildCron()"><label for="d-fri" class="day-label">F</label>
+                        <input type="checkbox" id="d-sat" class="day-checkbox" value="6" onchange="buildCron()"><label for="d-sat" class="day-label">S</label>
+                        <input type="checkbox" id="d-sun" class="day-checkbox" value="0" onchange="buildCron()"><label for="d-sun" class="day-label">S</label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Generated Schedule Code</label>
+                    <input type="text" id="final-schedule" readonly class="generated-cron">
+                </div>
+
                 <div class="form-group">
                     <label>Execution Type</label>
                     <select id="type">
@@ -86,186 +162,312 @@
                         <option value="EXACTLY_ONCE">EXACTLY_ONCE</option>
                     </select>
                 </div>
-                <button type="submit">Schedule Job</button>
+                
+                <button type="submit" id="submit-btn">Schedule Job</button>
+                <button type="button" id="cancel-btn" style="display:none; background:#ccc; margin-top:10px;" onclick="cancelEdit()">Cancel Edit</button>
             </form>
         </div>
 
         <div class="card">
             <h2>System Metrics</h2>
-            <div id="metrics-display" style="font-family: monospace; line-height: 1.6;">
-                Loading...
-            </div>
+            <div id="metrics-display" style="font-family: monospace; line-height: 1.6;">Loading...</div>
         </div>
     </div>
 
     <div class="main-content">
-        <div class="card">
-            <h2>Active Jobs</h2>
+        <div class="card" style="height: calc(100vh - 150px); display: flex; flex-direction: column;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h2 style="border:none; margin:0;">Active Jobs</h2>
+                <div class="filter-bar">
+                    <button class="filter-btn active" id="filter-all" onclick="setFilter('all')">All Jobs</button>
+                    <button class="filter-btn" id="filter-fail" onclick="setFilter('failure')">Failures (0)</button>
+                </div>
+            </div>
+            
             <div id="jobs-list">
                 <div class="loader">Loading jobs...</div>
             </div>
         </div>
+    </div>
+</div>
 
-        <div class="card" id="history-panel" style="display:none;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <h2 id="history-title">Execution History</h2>
-                <button class="btn-sm btn-outline" onclick="closeHistory()">Close</button>
-            </div>
+<div id="history-modal" class="modal-overlay" onclick="closeHistoryOnOutside(event)">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="history-title">Execution History</h2>
+            <button class="close-btn" onclick="closeHistory()">&times;</button>
+        </div>
+        <div class="modal-body">
             <div id="executions-list"></div>
         </div>
     </div>
 </div>
 
 <script>
-    // Configuration
     const API_URL = 'http://localhost:3000/api';
+    let globalJobList = []; 
+    let editingJobId = null; 
+    let currentFilter = 'all';
+    let jobStatuses = {}; // Map of jobId -> status ('success' | 'failure')
 
-    // State
-    let activeInterval = null;
+    // --- BUILDER LOGIC (UPDATED FOR TEXT DAYS) ---
+    function updateBuilderView() {
+        const type = document.getElementById('builder-type').value;
+        document.getElementById('section-seconds').classList.add('hidden');
+        document.getElementById('section-time').classList.add('hidden');
+        document.getElementById('section-days').classList.add('hidden');
+        document.getElementById('final-schedule').readOnly = true;
 
-    // --- Core Functions ---
+        if (type === 'seconds') document.getElementById('section-seconds').classList.remove('hidden');
+        else if (type === 'daily') document.getElementById('section-time').classList.remove('hidden');
+        else if (type === 'weekly') {
+            document.getElementById('section-time').classList.remove('hidden');
+            document.getElementById('section-days').classList.remove('hidden');
+        } else if (type === 'custom') document.getElementById('final-schedule').readOnly = false;
+        buildCron();
+    }
 
+    function buildCron() {
+        const type = document.getElementById('builder-type').value;
+        const input = document.getElementById('final-schedule');
+        
+        // Map for converting checkboxes (0-6) to Text (SUN-SAT)
+        const dayMap = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+
+        if (type === 'custom') return;
+
+        if (type === 'seconds') {
+            const step = parseInt(document.getElementById('seconds-input').value);
+            if(step===60) input.value="0 * * * * *";
+            else {
+                const arr=[]; for(let i=0;i<60;i+=step) arr.push(i);
+                input.value=`${arr.join(',')} * * * * *`;
+            }
+        } else {
+            const time=document.getElementById('time-input').value.split(':');
+            let days='*';
+            if(type==='weekly') {
+                const chk = Array.from(document.querySelectorAll('.day-checkbox:checked')).map(c=>c.value);
+                // NEW: Convert to text (MON,TUE) instead of numbers (1,2)
+                if(chk.length > 0) {
+                    days = chk.map(val => dayMap[parseInt(val)]).join(',');
+                }
+            }
+            input.value=`0 ${parseInt(time[1])} ${parseInt(time[0])} * * ${days}`;
+        }
+    }
+
+    // --- API & UI LOGIC ---
     async function fetchJobs() {
         try {
             const res = await fetch(`${API_URL}/jobs`);
             const data = await res.json();
-            // Handle if API returns array directly OR { jobs: [...] }
-            const jobsList = Array.isArray(data) ? data : (data.jobs || []);
-            renderJobs(jobsList);
-        } catch (e) {
-            console.error(e);
-            document.getElementById('jobs-list').innerHTML = '<div style="color:red">Error loading jobs. Check console.</div>';
+            const all = Array.isArray(data)?data:(data.jobs||[]);
+            globalJobList = all.filter(j => j.status !== 'deleted');
+            renderJobs(); 
+            checkJobHealth(globalJobList);
+        } catch (e) { console.error(e); }
+    }
+
+    function setFilter(filter) {
+        currentFilter = filter;
+        document.getElementById('filter-all').className = filter === 'all' ? 'filter-btn active' : 'filter-btn';
+        const failBtn = document.getElementById('filter-fail');
+        failBtn.className = filter === 'failure' ? 'filter-btn active-error' : 'filter-btn';
+        if(filter !== 'failure' && failBtn.innerText.includes('(0)')) {
+             failBtn.style.color = '#555'; 
+             failBtn.style.borderColor = '#eee';
+             failBtn.style.background = 'white';
         }
+        renderJobs();
+    }
+
+    async function checkJobHealth(jobs) {
+        if(!jobs || !jobs.length) return;
+        let failCount = 0;
+        for(const job of jobs) {
+            try {
+                const res = await fetch(`${API_URL}/jobs/${job.jobId}/executions?limit=1`);
+                const data = await res.json();
+                const lastRun = data.executions && data.executions[0];
+                if(lastRun && lastRun.status === 'failure') {
+                    jobStatuses[job.jobId] = 'failure';
+                    failCount++;
+                } else if(lastRun && lastRun.status === 'success') {
+                    jobStatuses[job.jobId] = 'success';
+                } else {
+                    jobStatuses[job.jobId] = 'pending';
+                }
+                const badge = document.getElementById(`status-pill-${job.jobId}`);
+                if(badge) {
+                    if(!lastRun) { badge.className = 'pill pill-pending'; badge.innerText = 'CHECKING...'; }
+                    else if(lastRun.status === 'success') { badge.className = 'pill pill-success'; badge.innerText = 'SUCCESS'; }
+                    else { badge.className = 'pill pill-failure'; badge.innerText = 'FAILURE'; }
+                }
+            } catch(e) {}
+        }
+
+        const failBtn = document.getElementById('filter-fail');
+        failBtn.innerText = `Failures (${failCount})`;
+        const sysStatus = document.getElementById('system-status');
+        if (failCount > 0) {
+            failBtn.style.color = '#e74c3c'; failBtn.style.borderColor = '#e74c3c';
+            failBtn.innerText = `🔴 Failures (${failCount})`;
+            sysStatus.innerText = "Attention Needed"; sysStatus.className = "status-badge alert"; sysStatus.style.background = "var(--error)";
+        } else {
+            failBtn.style.color = '#555'; failBtn.style.borderColor = '#eee';
+            sysStatus.innerText = "System Online"; sysStatus.className = "status-badge"; sysStatus.style.background = "var(--success)";
+        }
+    }
+
+    function renderJobs() {
+        const c = document.getElementById('jobs-list');
+        const filtered = globalJobList.filter(job => {
+            if (currentFilter === 'all') return true;
+            if (currentFilter === 'failure') return jobStatuses[job.jobId] === 'failure';
+            return true;
+        });
+
+        if(!filtered.length) {
+            if(currentFilter === 'failure') c.innerHTML = '<div style="text-align:center; padding:20px; color:#aaa;">No failed jobs! System is healthy. 🌿</div>';
+            else c.innerHTML='<div class="loader">No active jobs.</div>';
+            return;
+        }
+        
+        const newHTML = filtered.map(j => {
+            const currentStatus = jobStatuses[j.jobId];
+            let badgeHTML = '<span id="status-pill-'+j.jobId+'" class="pill pill-pending">Checking...</span>';
+            if(currentStatus === 'success') badgeHTML = `<span id="status-pill-${j.jobId}" class="pill pill-success">SUCCESS</span>`;
+            if(currentStatus === 'failure') badgeHTML = `<span id="status-pill-${j.jobId}" class="pill pill-failure">FAILURE</span>`;
+
+            return `
+            <div class="job-item">
+                <div class="job-header">
+                    <div class="job-info-left">
+                        <span class="job-schedule">🕒 ${j.schedule}</span>
+                        <span class="job-id">ID: ${j.jobId}</span>
+                    </div>
+                    ${badgeHTML}
+                </div>
+                <div class="job-api">Target: ${j.api}</div>
+                <div class="actions">
+                    <button class="btn-sm btn-outline" onclick="showHistory('${j.jobId}')">History</button>
+                    <button class="btn-sm btn-edit" onclick="editJob('${j.jobId}', '${j.api}', '${j.schedule}', '${j.type}')">Edit</button>
+                    <button class="btn-sm btn-danger" onclick="deleteJob('${j.jobId}')">Stop</button>
+                </div>
+            </div>`;
+        }).join('');
+        c.innerHTML = newHTML;
+    }
+
+    async function handleFormSubmit(e) {
+        e.preventDefault();
+        const payload = {
+            api: document.getElementById('api').value,
+            schedule: document.getElementById('final-schedule').value,
+            type: document.getElementById('type').value
+        };
+
+        try {
+            if (editingJobId) {
+                const res = await fetch(`${API_URL}/jobs/${editingJobId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    fetchJobs(); cancelEdit();
+                    const btn = document.getElementById('submit-btn');
+                    btn.innerText = "✓ Updated!";
+                    setTimeout(() => { btn.innerText = "Schedule Job"; }, 2000);
+                } else alert('Update Failed');
+            } else {
+                const res = await fetch(`${API_URL}/jobs`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.jobId) { 
+                    fetchJobs(); fetchMetrics(); cancelEdit();
+                    const btn = document.getElementById('submit-btn');
+                    btn.innerText = "✓ Created!";
+                    setTimeout(() => { btn.innerText = "Schedule Job"; }, 2000);
+                } else alert('Error: '+JSON.stringify(data));
+            }
+        } catch(e) { alert('Request Failed'); }
+    }
+
+    function editJob(id, api, schedule, type) {
+        editingJobId = id;
+        document.getElementById('api').value = api;
+        document.getElementById('type').value = type;
+        document.getElementById('builder-type').value = 'custom';
+        updateBuilderView();
+        document.getElementById('final-schedule').value = schedule;
+        document.getElementById('form-title').innerText = "Edit Job";
+        document.getElementById('form-title').style.color = "var(--warn)";
+        const btn = document.getElementById('submit-btn');
+        btn.innerText = "Update Job";
+        btn.classList.add('update-mode');
+        document.getElementById('cancel-btn').style.display = 'block';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function cancelEdit() {
+        editingJobId = null;
+        document.getElementById('create-job-form').reset();
+        document.getElementById('form-title').innerText = "Create New Job";
+        document.getElementById('form-title').style.color = "var(--dark)";
+        const btn = document.getElementById('submit-btn');
+        btn.innerText = "Schedule Job";
+        btn.classList.remove('update-mode');
+        document.getElementById('cancel-btn').style.display = 'none';
+        document.getElementById('builder-type').value = 'seconds';
+        updateBuilderView();
+    }
+
+    async function deleteJob(id) {
+        if(!confirm('Stop this job?')) return;
+        await fetch(`${API_URL}/jobs/${id}`,{method:'DELETE'});
+        fetchJobs();
     }
 
     async function fetchMetrics() {
         try {
             const res = await fetch(`${API_URL}/metrics`);
-            const data = await res.json();
-            const m = data.scheduler || {};
-            document.getElementById('metrics-display').innerHTML = `
-                <strong>Active Jobs:</strong> ${m.activeJobs || 0}<br>
-                <strong>Total Runs:</strong> ${m.totalExecutions || 0}<br>
-                <strong>Success Rate:</strong> ${m.successRate || '0%'}<br>
-                <strong>Avg Delay:</strong> ${Math.round(m.averageDelay || 0)}ms
-            `;
-        } catch (e) { console.error(e); }
+            const d = await res.json();
+            const m = d.scheduler||{};
+            document.getElementById('metrics-display').innerHTML=`
+                <strong>Active Jobs:</strong> ${m.activeJobs||0}<br>
+                <strong>Total Runs:</strong> ${m.totalExecutions||0}<br>
+                <strong>Success Rate:</strong> ${m.successRate||'0%'}<br>
+                <strong>Avg Delay:</strong> ${Math.round(m.averageDelay||0)}ms`;
+        } catch(e){}
     }
 
-    async function createJob(e) {
-        e.preventDefault();
-        const payload = {
-            api: document.getElementById('api').value,
-            schedule: document.getElementById('schedule').value,
-            type: document.getElementById('type').value
-        };
-
-        try {
-            const res = await fetch(`${API_URL}/jobs`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            const data = await res.json();
-            
-            if (data.jobId) {
-                alert('Job Created Successfully!');
-                fetchJobs();
-                fetchMetrics();
-            } else {
-                alert('Error: ' + JSON.stringify(data));
-            }
-        } catch (e) {
-            alert('Failed to create job');
-        }
+    async function showHistory(id) {
+        document.getElementById('history-modal').style.display='flex';
+        document.getElementById('executions-list').innerHTML='<div class="loader">Loading...</div>';
+        document.getElementById('history-title').innerText=`History: ${id.slice(0,8)}...`;
+        const res = await fetch(`${API_URL}/jobs/${id}/executions?limit=50`);
+        const data = await res.json();
+        const execs = data.executions||[];
+        const c = document.getElementById('executions-list');
+        if(!execs.length) c.innerHTML='<div style="padding:20px;text-align:center">No runs yet.</div>';
+        else c.innerHTML=`<table><thead><tr><th>Time</th><th>Status</th><th>Dur</th><th>Code</th></tr></thead><tbody>
+            ${execs.map(e=>`<tr><td>${new Date(e.timestamp).toLocaleTimeString()}</td><td class="status-${e.status}">${e.status.toUpperCase()}</td><td>${e.duration}ms</td><td>${e.httpStatus||'-'}</td></tr>`).join('')}
+        </tbody></table>`;
     }
+    function closeHistory(){document.getElementById('history-modal').style.display='none';}
+    function closeHistoryOnOutside(e){if(e.target.id==='history-modal')closeHistory();}
 
-    async function deleteJob(id) {
-        if(!confirm('Are you sure you want to stop this job?')) return;
-        await fetch(`${API_URL}/jobs/${id}`, { method: 'DELETE' });
-        fetchJobs();
-    }
-
-    async function showHistory(jobId) {
-        document.getElementById('history-panel').style.display = 'block';
-        document.getElementById('executions-list').innerHTML = '<div class="loader">Loading history...</div>';
-        document.getElementById('history-title').innerText = `History: ${jobId.slice(0,8)}...`;
-        
-        try {
-            const res = await fetch(`${API_URL}/jobs/${jobId}/executions`);
-            const data = await res.json();
-            renderExecutions(data.executions || []);
-        } catch (e) {
-            document.getElementById('executions-list').innerHTML = 'Error loading history.';
-        }
-    }
-
-    // --- Render Functions ---
-
-    function renderJobs(jobs) {
-        const container = document.getElementById('jobs-list');
-        if (jobs.length === 0) {
-            container.innerHTML = '<div class="loader">No active jobs found. Create one!</div>';
-            return;
-        }
-
-        container.innerHTML = jobs.map(job => `
-            <div class="job-item">
-                <div class="job-header">
-                    <span class="job-schedule">🕒 ${job.schedule}</span>
-                    <span class="job-id">ID: ${job.jobId}</span>
-                </div>
-                <div class="job-api">Target: ${job.api}</div>
-                <div class="actions">
-                    <button class="btn-sm btn-outline" onclick="showHistory('${job.jobId}')">View History</button>
-                    <button class="btn-sm btn-danger" onclick="deleteJob('${job.jobId}')">Delete</button>
-                </div>
-            </div>
-        `).join('');
-    }
-
-    function renderExecutions(executions) {
-        const container = document.getElementById('executions-list');
-        if (executions.length === 0) {
-            container.innerHTML = '<div style="padding:10px; color:#666;">No executions recorded yet. Wait for the schedule...</div>';
-            return;
-        }
-
-        const html = `
-            <table>
-                <thead><tr><th>Time</th><th>Status</th><th>Duration</th><th>Code</th></tr></thead>
-                <tbody>
-                    ${executions.map(exec => `
-                        <tr>
-                            <td>${new Date(exec.timestamp).toLocaleTimeString()}</td>
-                            <td class="status-${exec.status}">${exec.status.toUpperCase()}</td>
-                            <td>${exec.duration}ms</td>
-                            <td>${exec.httpStatus || '-'}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        `;
-        container.innerHTML = html;
-    }
-
-    function closeHistory() {
-        document.getElementById('history-panel').style.display = 'none';
-    }
-
-    // --- Initialization ---
-
-    document.getElementById('create-job-form').addEventListener('submit', createJob);
-    
-    // Initial Load
-    fetchJobs();
-    fetchMetrics();
-
-    // Auto-refresh data every 3 seconds for "Real-time" feel
-    setInterval(() => {
-        fetchMetrics();
-    }, 3000);
-
+    // Init
+    document.getElementById('create-job-form').addEventListener('submit', handleFormSubmit);
+    fetchJobs(); 
+    fetchMetrics(); 
+    updateBuilderView();
+    setInterval(() => { fetchMetrics(); checkJobHealth(globalJobList); }, 2000);
 </script>
 </body>
 </html>

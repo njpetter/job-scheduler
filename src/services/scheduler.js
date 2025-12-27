@@ -6,6 +6,8 @@
 const CronParser = require('../utils/cronParser');
 const Job = require('../models/Job');
 const Executor = require('./executor');
+// We need direct DB access for the update command
+const db = require('../database/db'); 
 
 class Scheduler {
   constructor() {
@@ -18,6 +20,7 @@ class Scheduler {
       failedExecutions: 0,
       averageDelay: 0
     };
+    this.db = db; // Store DB reference
   }
 
   /**
@@ -67,7 +70,7 @@ class Scheduler {
   }
 
   /**
-   * Schedule a job
+   * Schedule a job (Internal Helper)
    */
   async scheduleJob(job) {
     try {
@@ -75,7 +78,7 @@ class Scheduler {
       const now = new Date();
       const nextExecution = CronParser.getNextExecution(now, schedule);
 
-      // Cancel existing schedule if job already exists
+      // Cancel existing schedule if job already exists in memory
       if (this.jobs.has(job.jobId)) {
         const existing = this.jobs.get(job.jobId);
         if (existing.timeoutId) {
@@ -84,26 +87,23 @@ class Scheduler {
       }
 
       // Calculate delay until next execution
-      const delay = nextExecution.getTime() - now.getTime();
+      let delay = nextExecution.getTime() - now.getTime();
 
-      // If delay is somehow negative (execution time passed while processing), 
-      // look for the NEXT execution time to avoid infinite immediate loops.
+      // If delay is negative (execution time passed), find next time
       if (delay < 0) {
         const newNext = CronParser.getNextExecution(new Date(now.getTime() + 1000), schedule);
-        const newDelay = newNext.getTime() - now.getTime();
-        this.scheduleExecution(job, newNext, newDelay);
+        delay = newNext.getTime() - now.getTime();
+        this.scheduleExecution(job, newNext, delay);
       } else {
         this.scheduleExecution(job, nextExecution, delay);
       }
 
-      // We only store the basic info. The timeout callback handles the rest.
-      // We don't need to store 'timeoutId' in the map IF we don't plan to cancel individually,
-      // but it's good practice to keep it for the stop() function.
+      // Store in memory
       this.jobs.set(job.jobId, {
         job,
         schedule,
         nextExecution,
-        timeoutId: null // Will be updated inside scheduleExecution
+        timeoutId: null // Updated inside scheduleExecution
       });
 
       console.log(`[Scheduler] Scheduled job ${job.jobId} - Next execution: ${nextExecution.toISOString()}`);
@@ -116,8 +116,7 @@ class Scheduler {
    * Schedule a single execution using the system timer
    */
   scheduleExecution(job, executionTime, delay) {
-    // Safety check: 32-bit integer limit for setTimeout is ~24.8 days.
-    // If delay is larger, we should set a max delay and re-check later.
+    // Safety check: 32-bit integer limit for setTimeout
     const MAX_DELAY = 2147483647;
     if (delay > MAX_DELAY) {
         delay = MAX_DELAY;
@@ -127,11 +126,11 @@ class Scheduler {
       // Execute the job
       await this.executeJob(job);
       
-      // Once done, calculate the NEXT run and reschedule
+      // Once done, reschedule
       await this.rescheduleJob(job.jobId);
     }, delay);
 
-    // Update the map with the new timeout ID so we can cancel it if needed
+    // Update the map
     if (this.jobs.has(job.jobId)) {
         const jobData = this.jobs.get(job.jobId);
         jobData.timeoutId = timeoutId;
@@ -158,9 +157,7 @@ class Scheduler {
 
     console.log(`[Scheduler] Executing job ${job.jobId} (drift: ${drift}ms)`);
 
-    // Execute job asynchronously.
-    // We do NOT await this.executor.execute() because we don't want to delay
-    // the rescheduling of the next run.
+    // Non-blocking execution
     this.executor.execute(job).then(result => {
       if (result.status === 'success') {
         this.metrics.successfulExecutions++;
@@ -182,7 +179,6 @@ class Scheduler {
 
     try {
       const now = new Date();
-      // Calculate next run based on NOW, ensuring we don't schedule in the past
       const nextExecution = CronParser.getNextExecution(now, jobData.schedule);
       const delay = nextExecution.getTime() - now.getTime();
 
@@ -202,10 +198,42 @@ class Scheduler {
   }
 
   /**
-   * Update an existing job
+   * UPDATE JOB (New Method for True Editing)
+   * Updates database and restarts the job in memory
    */
-  async updateJob(job) {
-    await this.scheduleJob(job);
+  async updateJob(jobId, updates) {
+    // 1. Check if job exists in memory
+    const existingJobData = this.jobs.get(jobId);
+    if (!existingJobData) {
+        throw new Error('Job not found in active scheduler');
+    }
+
+    // 2. Clear the old timer
+    if (existingJobData.timeoutId) {
+        clearTimeout(existingJobData.timeoutId);
+    }
+
+    // 3. Update the Database (Persistence)
+    // We use the direct DB reference we imported
+    await this.db.run(
+        `UPDATE jobs SET schedule = ?, api = ?, type = ?, status = 'active' WHERE jobId = ?`,
+        [updates.schedule, updates.api, updates.type, jobId]
+    );
+
+    // 4. Update the Job Object
+    const updatedJob = {
+        ...existingJobData.job, // Keep ID and other props
+        schedule: updates.schedule,
+        api: updates.api,
+        type: updates.type,
+        status: 'active'
+    };
+
+    // 5. Reschedule immediately with new settings
+    await this.scheduleJob(updatedJob);
+    
+    console.log(`[Scheduler] updatedJob: Successfully updated ${jobId}`);
+    return updatedJob;
   }
 
   /**
