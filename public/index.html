@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lenskart Job Scheduler</title>
+    <style>
+        :root { --primary: #00bac6; --dark: #1a1a1a; --light: #f4f4f4; --success: #2ecc71; --error: #e74c3c; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background: #f0f2f5; color: #333; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        
+        /* Header */
+        header { background: var(--dark); color: white; padding: 1rem 0; margin-bottom: 2rem; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        header .container { display: flex; justify-content: space-between; align-items: center; }
+        h1 { margin: 0; font-size: 1.5rem; }
+        .status-badge { background: var(--success); color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; }
+
+        /* Grid Layout */
+        .dashboard { display: grid; grid-template-columns: 350px 1fr; gap: 20px; }
+        @media (max-width: 768px) { .dashboard { grid-template-columns: 1fr; } }
+
+        /* Cards */
+        .card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        .card h2 { margin-top: 0; color: var(--dark); border-bottom: 2px solid #eee; padding-bottom: 10px; font-size: 1.2rem; }
+
+        /* Form */
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: 500; }
+        input, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; }
+        button:hover { opacity: 0.9; }
+
+        /* Job List */
+        .job-item { border: 1px solid #eee; border-radius: 4px; padding: 15px; margin-bottom: 10px; transition: all 0.2s; position: relative; }
+        .job-item:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.05); border-left: 4px solid var(--primary); }
+        .job-header { display: flex; justify-content: space-between; margin-bottom: 5px; }
+        .job-id { font-family: monospace; color: #666; font-size: 0.8rem; }
+        .job-schedule { font-weight: bold; color: var(--primary); }
+        .job-api { font-size: 0.9rem; color: #555; word-break: break-all; }
+        .actions { margin-top: 10px; display: flex; gap: 10px; }
+        .btn-sm { padding: 5px 10px; font-size: 0.8rem; width: auto; }
+        .btn-danger { background: var(--error); }
+        .btn-outline { background: transparent; border: 1px solid var(--primary); color: var(--primary); }
+
+        /* Executions Table */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { text-align: left; padding: 8px; border-bottom: 1px solid #eee; font-size: 0.9rem; }
+        th { color: #888; font-weight: 500; }
+        .status-success { color: var(--success); font-weight: bold; }
+        .status-failure { color: var(--error); font-weight: bold; }
+
+        /* Loader */
+        .loader { text-align: center; padding: 20px; color: #888; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="container">
+        <div style="display:flex; align-items:center; gap:10px;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            <h1>Lenskart Job Scheduler</h1>
+        </div>
+        <div id="system-status" class="status-badge">System Online</div>
+    </div>
+</header>
+
+<div class="container dashboard">
+    <div class="sidebar">
+        <div class="card">
+            <h2>Create New Job</h2>
+            <form id="create-job-form">
+                <div class="form-group">
+                    <label>API Endpoint (Target)</label>
+                    <input type="url" id="api" placeholder="https://httpbin.org/post" required value="https://httpbin.org/post">
+                </div>
+                <div class="form-group">
+                    <label>CRON Schedule (Seconds supported)</label>
+                    <input type="text" id="schedule" placeholder="*/5 * * * * *" required value="*/10 * * * * *">
+                    <small style="color:#666; font-size:0.8rem;">Format: sec min hour day month dayOfWeek</small>
+                </div>
+                <div class="form-group">
+                    <label>Execution Type</label>
+                    <select id="type">
+                        <option value="ATLEAST_ONCE">ATLEAST_ONCE (Retry on fail)</option>
+                        <option value="EXACTLY_ONCE">EXACTLY_ONCE</option>
+                    </select>
+                </div>
+                <button type="submit">Schedule Job</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>System Metrics</h2>
+            <div id="metrics-display" style="font-family: monospace; line-height: 1.6;">
+                Loading...
+            </div>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="card">
+            <h2>Active Jobs</h2>
+            <div id="jobs-list">
+                <div class="loader">Loading jobs...</div>
+            </div>
+        </div>
+
+        <div class="card" id="history-panel" style="display:none;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h2 id="history-title">Execution History</h2>
+                <button class="btn-sm btn-outline" onclick="closeHistory()">Close</button>
+            </div>
+            <div id="executions-list"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Configuration
+    const API_URL = 'http://localhost:3000/api';
+
+    // State
+    let activeInterval = null;
+
+    // --- Core Functions ---
+
+    async function fetchJobs() {
+        try {
+            const res = await fetch(`${API_URL}/jobs`);
+            const data = await res.json();
+            // Handle if API returns array directly OR { jobs: [...] }
+            const jobsList = Array.isArray(data) ? data : (data.jobs || []);
+            renderJobs(jobsList);
+        } catch (e) {
+            console.error(e);
+            document.getElementById('jobs-list').innerHTML = '<div style="color:red">Error loading jobs. Check console.</div>';
+        }
+    }
+
+    async function fetchMetrics() {
+        try {
+            const res = await fetch(`${API_URL}/metrics`);
+            const data = await res.json();
+            const m = data.scheduler || {};
+            document.getElementById('metrics-display').innerHTML = `
+                <strong>Active Jobs:</strong> ${m.activeJobs || 0}<br>
+                <strong>Total Runs:</strong> ${m.totalExecutions || 0}<br>
+                <strong>Success Rate:</strong> ${m.successRate || '0%'}<br>
+                <strong>Avg Delay:</strong> ${Math.round(m.averageDelay || 0)}ms
+            `;
+        } catch (e) { console.error(e); }
+    }
+
+    async function createJob(e) {
+        e.preventDefault();
+        const payload = {
+            api: document.getElementById('api').value,
+            schedule: document.getElementById('schedule').value,
+            type: document.getElementById('type').value
+        };
+
+        try {
+            const res = await fetch(`${API_URL}/jobs`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            
+            if (data.jobId) {
+                alert('Job Created Successfully!');
+                fetchJobs();
+                fetchMetrics();
+            } else {
+                alert('Error: ' + JSON.stringify(data));
+            }
+        } catch (e) {
+            alert('Failed to create job');
+        }
+    }
+
+    async function deleteJob(id) {
+        if(!confirm('Are you sure you want to stop this job?')) return;
+        await fetch(`${API_URL}/jobs/${id}`, { method: 'DELETE' });
+        fetchJobs();
+    }
+
+    async function showHistory(jobId) {
+        document.getElementById('history-panel').style.display = 'block';
+        document.getElementById('executions-list').innerHTML = '<div class="loader">Loading history...</div>';
+        document.getElementById('history-title').innerText = `History: ${jobId.slice(0,8)}...`;
+        
+        try {
+            const res = await fetch(`${API_URL}/jobs/${jobId}/executions`);
+            const data = await res.json();
+            renderExecutions(data.executions || []);
+        } catch (e) {
+            document.getElementById('executions-list').innerHTML = 'Error loading history.';
+        }
+    }
+
+    // --- Render Functions ---
+
+    function renderJobs(jobs) {
+        const container = document.getElementById('jobs-list');
+        if (jobs.length === 0) {
+            container.innerHTML = '<div class="loader">No active jobs found. Create one!</div>';
+            return;
+        }
+
+        container.innerHTML = jobs.map(job => `
+            <div class="job-item">
+                <div class="job-header">
+                    <span class="job-schedule">🕒 ${job.schedule}</span>
+                    <span class="job-id">ID: ${job.jobId}</span>
+                </div>
+                <div class="job-api">Target: ${job.api}</div>
+                <div class="actions">
+                    <button class="btn-sm btn-outline" onclick="showHistory('${job.jobId}')">View History</button>
+                    <button class="btn-sm btn-danger" onclick="deleteJob('${job.jobId}')">Delete</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function renderExecutions(executions) {
+        const container = document.getElementById('executions-list');
+        if (executions.length === 0) {
+            container.innerHTML = '<div style="padding:10px; color:#666;">No executions recorded yet. Wait for the schedule...</div>';
+            return;
+        }
+
+        const html = `
+            <table>
+                <thead><tr><th>Time</th><th>Status</th><th>Duration</th><th>Code</th></tr></thead>
+                <tbody>
+                    ${executions.map(exec => `
+                        <tr>
+                            <td>${new Date(exec.timestamp).toLocaleTimeString()}</td>
+                            <td class="status-${exec.status}">${exec.status.toUpperCase()}</td>
+                            <td>${exec.duration}ms</td>
+                            <td>${exec.httpStatus || '-'}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+        container.innerHTML = html;
+    }
+
+    function closeHistory() {
+        document.getElementById('history-panel').style.display = 'none';
+    }
+
+    // --- Initialization ---
+
+    document.getElementById('create-job-form').addEventListener('submit', createJob);
+    
+    // Initial Load
+    fetchJobs();
+    fetchMetrics();
+
+    // Auto-refresh data every 3 seconds for "Real-time" feel
+    setInterval(() => {
+        fetchMetrics();
+    }, 3000);
+
+</script>
+</body>
+</html>

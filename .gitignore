@@ -1,0 +1,21 @@
+node_modules/
+*.log
+*.db
+*.sqlite
+.env
+.DS_Store
+dist/
+build/
+coverage/
+*.swp
+*.swo
+*~
+
+# Database files
+data/*.db
+data/*.sqlite
+data/*.db-journal
+
+# Keep data directory structure but ignore database files
+!data/.gitkeep
+
