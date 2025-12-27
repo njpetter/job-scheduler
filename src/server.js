@@ -17,25 +17,6 @@ app.use((req, res, next) => {
 });
 
 app.use(express.static(path.join(__dirname, '../public')));
-app.put('/api/jobs/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { schedule, api, type } = req.body;
-        
-        // Basic Validation
-        if (!schedule || !api) {
-            return res.status(400).json({ error: 'Missing required fields' });
-        }
-
-        // Call the new updateJob method in scheduler.js
-        await scheduler.updateJob(id, { schedule, api, type });
-        
-        res.json({ message: 'Job updated successfully', jobId: id });
-    } catch (error) {
-        console.error('Update failed:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
 
 app.use('/api/jobs', jobRoutes);
 app.use('/api', observabilityRoutes);

@@ -109,7 +109,13 @@ router.put('/:jobId', async (req, res) => {
     }
 
     const updatedJob = await Job.update(jobId, updates);
-    await scheduler.updateJob(updatedJob);
+    // Merge existing job with updates for scheduler
+    const schedulerUpdates = {
+      schedule: updates.schedule !== undefined ? updates.schedule : updatedJob.schedule,
+      api: updates.api !== undefined ? updates.api : updatedJob.api,
+      type: updates.type !== undefined ? updates.type : updatedJob.type
+    };
+    await scheduler.updateJob(jobId, schedulerUpdates);
 
     res.json({
       jobId: updatedJob.jobId,
