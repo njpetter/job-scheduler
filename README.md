@@ -190,7 +190,7 @@ npm run sample-data
 - Add rate limiting and authentication
 - Implement job prioritization and queues
 
-## 🐳 Docker Support
+## 🐳 Docker Support (Bonus 1)
 
 ```bash
 # Using Docker Compose
@@ -200,6 +200,42 @@ docker-compose up --build
 docker build -t job-scheduler .
 docker run -p 3000:3000 job-scheduler
 ```
+
+## 🚀 High Availability Design (Bonus 2)
+
+### Current State
+The current implementation is a single-instance system where:
+- All jobs execute in one Node.js process
+- Scheduler state is stored in memory (reloaded from database on restart)
+- Database persistence ensures job definitions survive restarts
+
+### High Availability Approach
+
+To extend the system for high availability and fault tolerance:
+
+1. **Shared Database**: Migrate from SQLite to PostgreSQL/MySQL for multi-instance access
+2. **Distributed Locking**: Implement leader election or distributed locks (using Redis/etcd) to ensure only one instance executes each job
+3. **Health Monitoring**: Add health checks and automatic failover mechanisms
+4. **State Synchronization**: Use database as source of truth for job state; instances poll/update job execution status
+5. **Graceful Shutdown**: Implement graceful shutdown handlers to transfer in-flight jobs to other instances
+6. **Load Balancer**: Deploy multiple instances behind a load balancer for API availability
+
+### Implementation Strategy
+
+![High Availability Architecture Diagram](./high-availability.png)
+
+**Key Components**:
+- **Leader Election**: One instance becomes the scheduler leader using distributed locks
+- **Job Assignment**: Leader assigns jobs to available instances or executes them directly
+- **Failover**: If leader fails, another instance acquires lock and takes over
+- **Execution Tracking**: All instances log executions to shared database
+- **API Redundancy**: All instances can serve API requests (read-only operations)
+
+This design ensures:
+- ✅ **No Single Point of Failure**: System continues functioning if one instance fails
+- ✅ **Job Continuity**: Jobs continue executing even during instance failures
+- ✅ **API Availability**: API remains accessible through any healthy instance
+- ✅ **Data Durability**: All job and execution data persisted in shared database
 
 ## 📝 Job Specification Format
 
