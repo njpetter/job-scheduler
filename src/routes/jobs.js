@@ -1,23 +1,13 @@
-/**
- * Job Routes
- * REST API endpoints for job management
- */
-
 const express = require('express');
 const router = express.Router();
 const Job = require('../models/Job');
 const Execution = require('../models/Execution');
 const scheduler = require('../services/scheduler');
 
-/**
- * POST /api/jobs
- * Create a new job
- */
 router.post('/', async (req, res) => {
   try {
     const { schedule, api, type } = req.body;
 
-    // Validation
     if (!schedule || !api || !type) {
       return res.status(400).json({
         error: 'Missing required fields: schedule, api, type'
@@ -30,17 +20,13 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Validate schedule format (basic check)
     if (typeof schedule !== 'string' || schedule.split(/\s+/).length !== 6) {
       return res.status(400).json({
         error: 'Invalid schedule format. Expected: "second minute hour day month dayOfWeek"'
       });
     }
 
-    // Create job
     const job = await Job.create({ schedule, api, type });
-
-    // Schedule the job
     await scheduler.addJob(job);
 
     res.status(201).json({
@@ -57,16 +43,11 @@ router.post('/', async (req, res) => {
   }
 });
 
-/**
- * GET /api/jobs/:jobId/executions
- * Get last 5 executions for a job
- */
 router.get('/:jobId/executions', async (req, res) => {
   try {
     const { jobId } = req.params;
     const limit = parseInt(req.query.limit) || 5;
 
-    // Verify job exists
     const job = await Job.getById(jobId);
     if (!job) {
       return res.status(404).json({
@@ -74,7 +55,6 @@ router.get('/:jobId/executions', async (req, res) => {
       });
     }
 
-    // Get executions
     const executions = await Execution.getLastN(jobId, limit);
 
     res.json({
@@ -97,16 +77,11 @@ router.get('/:jobId/executions', async (req, res) => {
   }
 });
 
-/**
- * PUT /api/jobs/:jobId
- * Update a job
- */
 router.put('/:jobId', async (req, res) => {
   try {
     const { jobId } = req.params;
     const { schedule, api, type } = req.body;
 
-    // Verify job exists
     const job = await Job.getById(jobId);
     if (!job) {
       return res.status(404).json({
@@ -114,7 +89,6 @@ router.put('/:jobId', async (req, res) => {
       });
     }
 
-    // Validation
     const updates = {};
     if (schedule !== undefined) {
       if (typeof schedule !== 'string' || schedule.split(/\s+/).length !== 6) {
@@ -134,10 +108,7 @@ router.put('/:jobId', async (req, res) => {
       updates.type = type;
     }
 
-    // Update job
     const updatedJob = await Job.update(jobId, updates);
-
-    // Reschedule the job
     await scheduler.updateJob(updatedJob);
 
     res.json({
@@ -154,10 +125,6 @@ router.put('/:jobId', async (req, res) => {
   }
 });
 
-/**
- * GET /api/jobs/:jobId
- * Get a specific job
- */
 router.get('/:jobId', async (req, res) => {
   try {
     const { jobId } = req.params;
@@ -179,15 +146,10 @@ router.get('/:jobId', async (req, res) => {
   }
 });
 
-/**
- * DELETE /api/jobs/:jobId
- * Delete a job
- */
 router.delete('/:jobId', async (req, res) => {
   try {
     const { jobId } = req.params;
 
-    // Verify job exists
     const job = await Job.getById(jobId);
     if (!job) {
       return res.status(404).json({
@@ -195,10 +157,7 @@ router.delete('/:jobId', async (req, res) => {
       });
     }
 
-    // Delete job
     await Job.delete(jobId);
-
-    // Remove from scheduler
     scheduler.removeJob(jobId);
 
     res.json({
@@ -215,10 +174,6 @@ router.delete('/:jobId', async (req, res) => {
   }
 });
 
-/**
- * GET /api/jobs
- * List all jobs
- */
 router.get('/', async (req, res) => {
   try {
     const jobs = await Job.getAll();

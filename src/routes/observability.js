@@ -1,17 +1,8 @@
-/**
- * Observability Routes
- * Endpoints for monitoring, debugging, and metrics
- */
-
 const express = require('express');
 const router = express.Router();
 const Execution = require('../models/Execution');
 const scheduler = require('../services/scheduler');
 
-/**
- * GET /api/metrics
- * Get system metrics
- */
 router.get('/metrics', (req, res) => {
   try {
     const schedulerMetrics = scheduler.getMetrics();
@@ -29,10 +20,6 @@ router.get('/metrics', (req, res) => {
   }
 });
 
-/**
- * GET /api/health
- * Health check endpoint
- */
 router.get('/health', async (req, res) => {
   try {
     res.json({
@@ -52,10 +39,6 @@ router.get('/health', async (req, res) => {
   }
 });
 
-/**
- * GET /api/executions
- * Get recent executions (for debugging)
- */
 router.get('/executions', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 100;
@@ -74,15 +57,9 @@ router.get('/executions', async (req, res) => {
   }
 });
 
-/**
- * GET /api/stats
- * Get overall statistics
- */
 router.get('/stats', async (req, res) => {
   try {
     const schedulerMetrics = scheduler.getMetrics();
-    
-    // Get execution stats from database
     const allExecutions = await Execution.getAll(1000);
     const totalExecutions = allExecutions.length;
     const successCount = allExecutions.filter(e => e.status === 'success').length;

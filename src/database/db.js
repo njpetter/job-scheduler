@@ -1,8 +1,3 @@
-/**
- * Database Connection Module
- * Provides a singleton database connection
- */
-
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const { promisify } = require('util');
@@ -20,7 +15,6 @@ class Database {
         if (err) {
           reject(err);
         } else {
-          // Enable foreign keys
           this.db.run('PRAGMA foreign_keys = ON');
           resolve();
         }
@@ -28,7 +22,6 @@ class Database {
     });
   }
 
-  // Promisified database methods
   run(sql, params = []) {
     return new Promise((resolve, reject) => {
       this.db.run(sql, params, function(err) {
@@ -82,7 +75,6 @@ class Database {
   }
 }
 
-// Singleton instance
 const db = new Database();
 
 module.exports = db;

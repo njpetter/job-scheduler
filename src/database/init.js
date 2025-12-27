@@ -1,14 +1,8 @@
-/**
- * Database Initialization Script
- * Creates tables for jobs and executions
- */
-
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
 const DB_PATH = path.join(__dirname, '../../data', 'scheduler.db');
 
-// Ensure data directory exists
 const fs = require('fs');
 const dataDir = path.dirname(DB_PATH);
 if (!fs.existsSync(dataDir)) {
@@ -23,9 +17,7 @@ const db = new sqlite3.Database(DB_PATH, (err) => {
   console.log('Connected to SQLite database');
 });
 
-// Create tables
 db.serialize(() => {
-  // Jobs table
   db.run(`
     CREATE TABLE IF NOT EXISTS jobs (
       jobId TEXT PRIMARY KEY,
@@ -44,7 +36,6 @@ db.serialize(() => {
     }
   });
 
-  // Executions table
   db.run(`
     CREATE TABLE IF NOT EXISTS executions (
       executionId TEXT PRIMARY KEY,
@@ -64,7 +55,6 @@ db.serialize(() => {
     }
   });
 
-  // Create index for faster queries
   db.run(`
     CREATE INDEX IF NOT EXISTS idx_executions_jobId_timestamp 
     ON executions(jobId, timestamp DESC)

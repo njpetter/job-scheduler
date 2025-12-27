@@ -1,15 +1,7 @@
-/**
- * Execution Model
- * Handles database operations for job executions
- */
-
 const { v4: uuidv4 } = require('uuid');
 const db = require('../database/db');
 
 class Execution {
-  /**
-   * Create a new execution record
-   */
   static async create(executionData) {
     const executionId = uuidv4();
     const { jobId, timestamp, status, httpStatus, duration, error } = executionData;
@@ -31,9 +23,6 @@ class Execution {
     };
   }
 
-  /**
-   * Get last N executions for a job
-   */
   static async getLastN(jobId, limit = 5) {
     return await db.all(
       `SELECT * FROM executions 
@@ -44,9 +33,6 @@ class Execution {
     );
   }
 
-  /**
-   * Get execution statistics for a job
-   */
   static async getStats(jobId) {
     const stats = await db.get(
       `SELECT 
@@ -61,9 +47,6 @@ class Execution {
     return stats;
   }
 
-  /**
-   * Get all executions (for observability)
-   */
   static async getAll(limit = 100) {
     return await db.all(
       `SELECT * FROM executions 

@@ -1,8 +1,3 @@
-/**
- * Sample Data Script
- * Creates sample jobs for testing
- */
-
 const db = require('../database/db');
 const Job = require('../models/Job');
 const scheduler = require('../services/scheduler');
@@ -12,25 +7,24 @@ async function createSampleData() {
     await db.connect();
     console.log('Connected to database');
 
-    // Sample jobs
     const sampleJobs = [
       {
-        schedule: '0 * * * * *', // Every minute at 0 seconds
+        schedule: '0 * * * * *',
         api: 'https://httpbin.org/post',
         type: 'ATLEAST_ONCE'
       },
       {
-        schedule: '30 0 * * * *', // Every hour at 30 seconds past the hour
+        schedule: '30 0 * * * *',
         api: 'https://httpbin.org/post',
         type: 'ATLEAST_ONCE'
       },
       {
-        schedule: '0 0 12 * * *', // Every day at 12:00:00 PM
+        schedule: '0 0 12 * * *',
         api: 'https://httpbin.org/post',
         type: 'ATLEAST_ONCE'
       },
       {
-        schedule: '31 10-15 1 * * MON-FRI', // Example from assignment
+        schedule: '31 10-15 1 * * MON-FRI',
         api: 'https://httpbin.org/post',
         type: 'ATLEAST_ONCE'
       }

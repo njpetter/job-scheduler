@@ -1,8 +1,3 @@
-/**
- * Main Server File
- * Entry point for the Job Scheduler application
- */
-
 const express = require('express');
 const db = require('./database/db');
 const scheduler = require('./services/scheduler');
@@ -13,22 +8,15 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Request logging middleware
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
   next();
 });
 
-// Serve static frontend files (Dashboard)
-// This must be BEFORE other routes so it works on '/'
 app.use(express.static(path.join(__dirname, '../public')));
-
-// --- NEW: EDIT JOB ROUTE (PUT) ---
-// We define this here because it needs direct access to the 'scheduler' instance
 app.put('/api/jobs/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -49,11 +37,8 @@ app.put('/api/jobs/:id', async (req, res) => {
     }
 });
 
-// API Routes
 app.use('/api/jobs', jobRoutes);
 app.use('/api', observabilityRoutes);
-
-// Error handling middleware
 app.use((err, req, res, next) => {
   console.error('[Server] Error:', err);
   res.status(500).json({
@@ -62,7 +47,6 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 404 handler
 app.use((req, res) => {
   res.status(404).json({
     error: 'Not found',
@@ -70,18 +54,14 @@ app.use((req, res) => {
   });
 });
 
-// Initialize database and start server
 async function start() {
   try {
-    // Connect to database
     await db.connect();
     console.log('✓ Database connected');
 
-    // Start scheduler
     await scheduler.start();
     console.log('✓ Scheduler started');
 
-    // Start server
     app.listen(PORT, () => {
       console.log(`\n🚀 Server running on http://localhost:${PORT}`);
       console.log(`📊 Dashboard:    http://localhost:${PORT}`);
@@ -93,7 +73,6 @@ async function start() {
   }
 }
 
-// Graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('\nSIGTERM received, shutting down gracefully...');
   scheduler.stop();
@@ -108,5 +87,4 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
-// Start the application
 start();
