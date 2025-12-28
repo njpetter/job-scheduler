@@ -1,4 +1,4 @@
-# High-Throughput Job Scheduler
+# High-Throughput Job Scheduler(B1.0)
 
 A scalable job scheduler system capable of executing thousands of scheduled jobs per second with high accuracy and reliability.
 
